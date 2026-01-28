@@ -141,6 +141,28 @@ class Client extends EventEmitter {
             return state == 'UNPAIRED' || state == 'UNPAIRED_IDLE';
         });
 
+
+        const isUnpairedState = (s) => s === 'UNPAIRED' || s === 'UNPAIRED_IDLE';
+
+        if (needAuthentication && this._readyEmitted) {
+            // Debounce: WA can briefly look unpaired during reload
+            await new Promise(r => setTimeout(r, 1500));
+
+            const stateNow = await this.pupPage.evaluate(() => window.AuthStore?.AppState?.state);
+
+            if (!isUnpairedState(stateNow)) {
+                // false alarm: session restored
+                return;
+            }
+
+            // console.log('[wwebjs] Stable unauthenticated state detected:', stateNow);
+            this.emit(Events.DISCONNECTED, 'LOGOUT');
+
+            this._readyEmitted = false;
+            this._authEventListenersInjected = false;
+            this.lastLoggedOut = false;
+        }
+
         if (needAuthentication) {
             const { failed, failureEventPayload, restart } = await this.authStrategy.onAuthenticationNeeded();
 
@@ -1494,7 +1516,8 @@ class Client extends EventEmitter {
      */
     async setDisplayName(displayName) {
         const couldSet = await this.pupPage.evaluate(async displayName => {
-            if (!window.Store.Conn.canSetMyPushname()) return false;
+            if (!window.Store.Conn?.canSetMyPushname()) return false;
+            if (typeof window.Store.Settings?.setPushname !== 'function') return false;
             await window.Store.Settings.setPushname(displayName);
             return true;
         }, displayName);
@@ -1508,7 +1531,7 @@ class Client extends EventEmitter {
      */
     async getState() {
         return await this.pupPage.evaluate(() => {
-            if (!window.Store) return null;
+            if (!window.Store || !window.Store.AppState) return null;
             return window.Store.AppState.state;
         });
     }
@@ -2258,7 +2281,7 @@ class Client extends EventEmitter {
     async addOrRemoveLabels(labelIds, chatIds) {
 
         return this.pupPage.evaluate(async (labelIds, chatIds) => {
-            if (['smba', 'smbi'].indexOf(window.Store.Conn.platform) === -1) {
+            if (['smba', 'smbi'].indexOf(window.Store.Conn?.platform) === -1) {
                 throw '[LT01] Only Whatsapp business';
             }
             const labels = window.WWebJS.getLabels().filter(e => labelIds.find(l => l == e.id) !== undefined);
