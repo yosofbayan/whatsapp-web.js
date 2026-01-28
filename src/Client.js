@@ -857,7 +857,7 @@ class Client extends EventEmitter {
 
             // Incoming call listener
             if (window.Store.Call) {
-                window.Store.Call.on('add', (call) => { window.onIncomingCall(call); });
+                // window.Store.Call.on('add', (call) => { window.onIncomingCall(call); });
             }
 
             // Chat event listeners
