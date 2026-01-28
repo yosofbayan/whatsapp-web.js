@@ -6,7 +6,7 @@ exports.LoadUtils = () => {
     window.WWebJS.forwardMessage = async (chatId, msgId) => {
         const msg = window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
         const chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
-        return await window.Store.ForwardUtils.forwardMessages({ 'chat': chat, 'msgs': [msg], 'multicast': true, 'includeCaption': true, 'appendedText': undefined });
+        return await window.Store.ForwardUtils.forwardMessages({'chat': chat, 'msgs' : [msg], 'multicast': true, 'includeCaption': true, 'appendedText' : undefined});
     };
 
     window.WWebJS.sendSeen = async (chatId) => {
@@ -33,11 +33,10 @@ exports.LoadUtils = () => {
 
     window.WWebJS.sendMessage = async (chat, content, options = {}) => {
         const isChannel = window.Store.ChatGetters.getIsNewsletter(chat);
-        const isStatus = window.Store.ChatGetters.getIsBroadcast(chat);
 
         let mediaOptions = {};
         if (options.media) {
-            mediaOptions = options.sendMediaAsSticker && !isChannel && !isStatus
+            mediaOptions =  options.sendMediaAsSticker && !isChannel
                 ? await window.WWebJS.processStickerData(options.media)
                 : await window.WWebJS.processMediaData(options.media, {
                     forceSticker: options.sendMediaAsSticker,
@@ -45,8 +44,7 @@ exports.LoadUtils = () => {
                     forceVoice: options.sendAudioAsVoice,
                     forceDocument: options.sendMediaAsDocument,
                     forceMediaHd: options.sendMediaAsHd,
-                    sendToChannel: isChannel,
-                    sendToStatus: isStatus
+                    sendToChannel: isChannel
                 });
             mediaOptions.caption = options.caption;
             content = options.sendMediaAsSticker ? undefined : mediaOptions.preview;
@@ -73,7 +71,7 @@ exports.LoadUtils = () => {
                     throw new Error('Could not get the quoted message.');
                 }
             }
-
+            
             delete options.ignoreQuoteErrors;
             delete options.quotedMessageId;
         }
@@ -105,15 +103,15 @@ exports.LoadUtils = () => {
             delete options.location;
         }
 
-        let pollOptions = {};
+        let _pollOptions = {};
         if (options.poll) {
-            const { pollName, pollOptions: _pollOptions } = options.poll;
+            const { pollName, pollOptions } = options.poll;
             const { allowMultipleAnswers, messageSecret } = options.poll.options;
-            pollOptions = {
+            _pollOptions = {
                 kind: 'pollCreation',
                 type: 'poll_creation',
                 pollName: pollName,
-                pollOptions: _pollOptions,
+                pollOptions: pollOptions,
                 pollSelectableOptionsCount: allowMultipleAnswers ? 0 : 1,
                 messageSecret:
                     Array.isArray(messageSecret) && messageSecret.length === 32
@@ -138,7 +136,7 @@ exports.LoadUtils = () => {
                     degreesLongitude: 0,
                     name: eventSendOptions.location
                 },
-                eventJoinLink: eventSendOptions.callType === 'none' ? null : await window.Store.ScheduledEventMsgUtils.createEventCallLink(
+                eventJoinLink: await window.Store.ScheduledEventMsgUtils.createEventCallLink(
                     startTimeTs,
                     eventSendOptions.callType
                 ),
@@ -194,7 +192,7 @@ exports.LoadUtils = () => {
                     preview = preview.data;
                     preview.preview = true;
                     preview.subtype = 'url';
-                    options = { ...options, ...preview };
+                    options = {...options, ...preview};
                 }
             }
         }
@@ -223,7 +221,7 @@ exports.LoadUtils = () => {
 
         let listOptions = {};
         if (options.list) {
-            if (window.Store.Conn?.platform === 'smba' || window.Store.Conn?.platform === 'smbi') {
+            if (window.Store.Conn.platform === 'smba' || window.Store.Conn.platform === 'smbi') {
                 throw '[LT01] Whatsapp business can\'t send this yet';
             }
             listOptions = {
@@ -259,10 +257,6 @@ exports.LoadUtils = () => {
             participant = window.Store.WidFactory.asUserWidOrThrow(from);
         }
 
-        if (typeof chat.id?.isStatus === 'function' && chat.id.isStatus()) {
-            participant = window.Store.WidFactory.asUserWidOrThrow(from);
-        }
-
         const newMsgKey = new window.Store.MsgKey({
             from: from,
             to: chat.id,
@@ -281,7 +275,7 @@ exports.LoadUtils = () => {
             id: newMsgKey,
             ack: 0,
             body: content,
-            from: from,
+            from: meUser,
             to: chat.id,
             local: true,
             self: 'out',
@@ -293,7 +287,7 @@ exports.LoadUtils = () => {
             ...(mediaOptions.toJSON ? mediaOptions.toJSON() : {}),
             ...quotedMsgOptions,
             ...locationOptions,
-            ...pollOptions,
+            ..._pollOptions,
             ...eventOptions,
             ...vcardOptions,
             ...buttonOptions,
@@ -301,7 +295,7 @@ exports.LoadUtils = () => {
             ...botOptions,
             ...extraOptions
         };
-
+        
         // Bot's won't reply if canonicalUrl is set (linking)
         if (botOptions) {
             delete message.canonicalUrl;
@@ -337,37 +331,6 @@ exports.LoadUtils = () => {
             return msg;
         }
 
-        if (isStatus) {
-            const { backgroundColor, fontStyle } = extraOptions;
-            const isMedia = Object.keys(mediaOptions).length > 0;
-            const mediaUpdate = data => window.Store.MediaUpdate(data, mediaOptions);
-            const msg = new window.Store.Msg.modelClass({
-                ...message,
-                author: participant ? participant : null,
-                messageSecret: window.crypto.getRandomValues(new Uint8Array(32)),
-                cannotBeRanked: window.Store.StatusUtils.canCheckStatusRankingPosterGating()
-            });
-
-            // for text only
-            const statusOptions = {
-                color: backgroundColor && window.WWebJS.assertColor(backgroundColor) || 0xff7acca5,
-                font: fontStyle >= 0 && fontStyle <= 7 && fontStyle || 0,
-                text: msg.body
-            };
-
-            await window.Store.StatusUtils[
-                isMedia ?
-                    'sendStatusMediaMsgAction' : 'sendStatusTextMsgAction'
-            ](
-                ...(
-                    isMedia ?
-                        [msg, mediaUpdate] : [statusOptions]
-                )
-            );
-
-            return msg;
-        }
-
         const [msgPromise, sendMsgResultPromise] = window.Store.SendMessage.addAndSendMsgToChat(chat, message);
         await msgPromise;
 
@@ -375,11 +338,11 @@ exports.LoadUtils = () => {
 
         return window.Store.Msg.get(newMsgKey._serialized);
     };
-
+	
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
         const extraOptions = options.extraOptions || {};
         delete options.extraOptions;
-
+        
         if (options.mentionedJidList) {
             options.mentionedJidList = options.mentionedJidList.map((id) => window.Store.WidFactory.createWid(id));
             options.mentionedJidList = options.mentionedJidList.filter(Boolean);
@@ -455,7 +418,7 @@ exports.LoadUtils = () => {
         return stickerInfo;
     };
 
-    window.WWebJS.processMediaData = async (mediaInfo, { forceSticker, forceGif, forceVoice, forceDocument, forceMediaHd, sendToChannel, sendToStatus }) => {
+    window.WWebJS.processMediaData = async (mediaInfo, { forceSticker, forceGif, forceVoice, forceDocument, forceMediaHd, sendToChannel }) => {
         const file = window.WWebJS.mediaInfoToFile(mediaInfo);
         const opaqueData = await window.Store.OpaqueData.createFromData(file, file.type);
         const mediaParams = {
@@ -464,11 +427,11 @@ exports.LoadUtils = () => {
             isPtt: forceVoice,
             asDocument: forceDocument
         };
-
+      
         if (forceMediaHd && file.type.indexOf('image/') === 0) {
             mediaParams.maxDimension = 2560;
         }
-
+      
         const mediaPrep = window.Store.MediaPrep.prepRawMedia(opaqueData, mediaParams);
         const mediaData = await mediaPrep.waitForPrep();
         const mediaObject = window.Store.MediaObject.getOrCreateMediaObject(mediaData.filehash);
@@ -478,11 +441,7 @@ exports.LoadUtils = () => {
             isNewsletter: sendToChannel,
         });
 
-        if (!mediaData.filehash) {
-            throw new Error('media-fault: sendToChat filehash undefined');
-        }
-
-        if ((forceVoice && mediaData.type === 'ptt') || (sendToStatus && mediaData.type === 'audio')) {
+        if (forceVoice && mediaData.type === 'ptt') {
             const waveform = mediaObject.contentInfo.waveform;
             mediaData.waveform =
                 waveform || await window.WWebJS.generateWaveform(file);
@@ -497,21 +456,13 @@ exports.LoadUtils = () => {
 
         mediaData.renderableUrl = mediaData.mediaBlob.url();
         mediaObject.consolidate(mediaData.toJSON());
-
         mediaData.mediaBlob.autorelease();
-        const shouldUseMediaCache = window.Store.MediaDataUtils.shouldUseMediaCache(
-            window.Store.MediaTypes.castToV4(mediaObject.type)
-        );
-        if (shouldUseMediaCache && mediaData.mediaBlob instanceof window.Store.OpaqueData) {
-            const formData = mediaData.mediaBlob.formData();
-            window.Store.BlobCache.InMemoryMediaBlobCache.put(mediaObject.filehash, formData);
-        }
 
         const dataToUpload = {
             mimetype: mediaData.mimetype,
             mediaObject,
             mediaType,
-            ...(sendToChannel ? { calculateToken: window.Store.SendChannelMessage.getRandomFilehash() } : {})
+            ...(sendToChannel ? { calculateToken: window.Store.SendChannelMessage.getRandomFilehash } : {})
         };
 
         const uploadedMedia = !sendToChannel
@@ -650,7 +601,7 @@ exports.LoadUtils = () => {
         if (chat.groupMetadata) {
             model.isGroup = true;
             const chatWid = window.Store.WidFactory.createWid(chat.id._serialized);
-            await window.Store.GroupMetadata?.update(chatWid);
+            await window.Store.GroupMetadata.update(chatWid);
             chat.groupMetadata.participants._models
                 .filter(x => x.id?._serialized?.endsWith('@lid'))
                 .forEach(x => x.contact?.phoneNumber && (x.id = x.contact.phoneNumber));
@@ -659,7 +610,7 @@ exports.LoadUtils = () => {
         }
 
         if (chat.newsletterMetadata) {
-            await window.Store.NewsletterMetadataCollection?.update(chat.id);
+            await window.Store.NewsletterMetadataCollection.update(chat.id);
             model.channelMetadata = chat.newsletterMetadata.serialize();
             model.channelMetadata.createdAtTs = chat.newsletterMetadata.creationTime;
         }
@@ -831,17 +782,17 @@ exports.LoadUtils = () => {
         chatId = window.Store.WidFactory.createWid(chatId);
 
         switch (state) {
-            case 'typing':
-                await window.Store.ChatState.sendChatStateComposing(chatId);
-                break;
-            case 'recording':
-                await window.Store.ChatState.sendChatStateRecording(chatId);
-                break;
-            case 'stop':
-                await window.Store.ChatState.sendChatStatePaused(chatId);
-                break;
-            default:
-                throw 'Invalid chatstate';
+        case 'typing':
+            await window.Store.ChatState.sendChatStateComposing(chatId);
+            break;
+        case 'recording':
+            await window.Store.ChatState.sendChatStateRecording(chatId);
+            break;
+        case 'stop':
+            await window.Store.ChatState.sendChatStatePaused(chatId);
+            break;
+        default:
+            throw 'Invalid chatstate';
         }
 
         return true;
@@ -900,7 +851,7 @@ exports.LoadUtils = () => {
         ]);
         await window.Store.Socket.deprecatedCastStanza(stanza);
     };
-
+    
     window.WWebJS.cropAndResizeImage = async (media, options = {}) => {
         if (!media.mimetype.includes('image'))
             throw new Error('Media is not an image');
@@ -910,7 +861,7 @@ exports.LoadUtils = () => {
 
         options = Object.assign({ size: 640, mimetype: media.mimetype, quality: .75, asDataUrl: false }, options);
 
-        const img = await new Promise((resolve, reject) => {
+        const img = await new Promise ((resolve, reject) => {
             const img = new Image();
             img.onload = () => resolve(img);
             img.onerror = reject;
@@ -965,11 +916,11 @@ exports.LoadUtils = () => {
             const res = await window.Store.GroupUtils.requestDeletePicture(chatWid);
             return res ? res.status === 200 : false;
         } catch (err) {
-            if (err.name === 'ServerStatusCodeError') return false;
+            if(err.name === 'ServerStatusCodeError') return false;
             throw err;
         }
     };
-
+    
     window.WWebJS.getProfilePicThumbToBase64 = async (chatWid) => {
         const profilePicCollection = await window.Store.ProfilePicThumb.find(chatWid);
 
@@ -1079,7 +1030,7 @@ exports.LoadUtils = () => {
         }));
 
         const groupJid = window.Store.WidToJid.widToGroupJid(groupWid);
-
+        
         const _getSleepTime = (sleep) => {
             if (!Array.isArray(sleep) || (sleep.length === 2 && sleep[0] === sleep[1])) {
                 return sleep;
@@ -1170,17 +1121,17 @@ exports.LoadUtils = () => {
         if (!message) return false;
 
         if (typeof duration !== 'number') return false;
-
+        
         const originalFunction = window.require('WAWebPinMsgConstants').getPinExpiryDuration;
         window.require('WAWebPinMsgConstants').getPinExpiryDuration = () => duration;
-
+        
         const response = await window.Store.PinnedMsgUtils.sendPinInChatMsg(message, action, duration);
 
         window.require('WAWebPinMsgConstants').getPinExpiryDuration = originalFunction;
 
         return response.messageSendResult === 'OK';
     };
-
+    
     window.WWebJS.getStatusModel = status => {
         const res = status.serialize();
         delete res._msgs;
@@ -1212,21 +1163,5 @@ exports.LoadUtils = () => {
         }
 
         return { lid, phone };
-    };
-
-    window.WWebJS.assertColor = (hex) => {
-        let color;
-        if (typeof hex === 'number') {
-            color = hex > 0 ? hex : 0xffffffff + parseInt(hex) + 1;
-        } else if (typeof hex === 'string') {
-            let number = hex.trim().replace('#', '');
-            if (number.length <= 6) {
-                number = 'FF' + number.padStart(6, '0');
-            }
-            color = parseInt(number, 16);
-        } else {
-            throw 'Invalid hex color';
-        }
-        return color;
     };
 };

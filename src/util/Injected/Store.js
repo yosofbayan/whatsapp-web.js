@@ -44,25 +44,9 @@ exports.ExposeStore = () => {
     };
 
     window.Store = Object.assign({}, window.require('WAWebCollections'));
-
-    // AppState - critical for connection state events (disconnected, etc.)
-    // May have moved or changed structure in WWeb 2.3000.x
-    try {
-        const socketModel = window.require('WAWebSocketModel');
-        window.Store.AppState = socketModel?.Socket ?? socketModel?.AppState ?? socketModel?.default?.Socket;
-    } catch {
-        // Module doesn't exist or structure changed
-    }
-
+    window.Store.AppState = window.require('WAWebSocketModel').Socket;
     window.Store.BlockContact = window.require('WAWebBlockContactAction');
-
-    // Conn - for connection/battery events
-    try {
-        const connModel = window.require('WAWebConnModel');
-        window.Store.Conn = connModel?.Conn ?? connModel?.default?.Conn ?? connModel?.default;
-    } catch {
-        // Module doesn't exist or structure changed
-    }
+    window.Store.Conn = window.require('WAWebConnModel').Conn;
     window.Store.Cmd = window.require('WAWebCmd').Cmd;
     window.Store.DownloadManager = window.require('WAWebDownloadManager').downloadManager;
     window.Store.GroupQueryAndUpdate = window.require('WAWebGroupQueryJob').queryAndUpdateGroupMetadataById;
@@ -70,7 +54,6 @@ exports.ExposeStore = () => {
     window.Store.MediaObject = window.require('WAWebMediaStorage');
     window.Store.MediaTypes = window.require('WAWebMmsMediaTypes');
     window.Store.MediaUpload = window.require('WAWebMediaMmsV4Upload');
-    window.Store.MediaUpdate = window.require('WAWebMediaUpdateMsg');
     window.Store.MsgKey = window.require('WAWebMsgKey');
     window.Store.OpaqueData = window.require('WAWebMediaOpaqueData');
     window.Store.QueryProduct = window.require('WAWebBizProductCatalogBridge');
@@ -79,14 +62,9 @@ exports.ExposeStore = () => {
     window.Store.SendDelete = window.require('WAWebDeleteChatAction');
     window.Store.SendMessage = window.require('WAWebSendMsgChatAction');
     window.Store.EditMessage = window.require('WAWebSendMessageEditAction');
-    window.Store.MediaDataUtils = window.require('WAWebMediaDataUtils');
-    window.Store.BlobCache = window.require('WAWebMediaInMemoryBlobCache');
     window.Store.SendSeen = window.require('WAWebUpdateUnreadChatAction');
     window.Store.User = window.require('WAWebUserPrefsMeUser');
-    window.Store.ContactMethods = {
-        ...window.require('WAWebContactGetters'),
-        ...window.require('WAWebFrontendContactGetters')
-    };
+    window.Store.ContactMethods = window.require('WAWebContactGetters');
     window.Store.UserConstructor = window.require('WAWebWid');
     window.Store.Validators = window.require('WALinkify');
     window.Store.WidFactory = window.require('WAWebWidFactory');
@@ -94,6 +72,7 @@ exports.ExposeStore = () => {
     window.Store.PresenceUtils = window.require('WAWebPresenceChatAction');
     window.Store.ChatState = window.require('WAWebChatStateBridge');
     window.Store.findCommonGroups = window.require('WAWebFindCommonGroupsContactAction').findCommonGroups;
+    window.Store.StatusUtils = window.require('WAWebContactStatusBridge');
     window.Store.ConversationMsgs = window.require('WAWebChatLoadMessages');
     window.Store.sendReactionToMsg = window.require('WAWebSendReactionMsgAction').sendReactionToMsg;
     window.Store.createOrUpdateReactionsModule = window.require('WAWebDBCreateOrUpdateReactions');
@@ -124,8 +103,7 @@ exports.ExposeStore = () => {
     window.Store.FindOrCreateChat = window.require('WAWebFindChatAction');
     window.Store.CustomerNoteUtils = window.require('WAWebNoteAction');
     window.Store.BusinessGatingUtils = window.require('WAWebBizGatingUtils');
-    window.Store.PollsVotesSchema = window.require('WAWebPollsVotesSchema');
-    window.Store.PollsSendVote = window.require('WAWebPollsSendVoteMsgAction');
+    window.Store.PollsVotesSchema = require('WAWebPollsVotesSchema');
 
     let setPushname;
     try {
@@ -139,6 +117,7 @@ exports.ExposeStore = () => {
         ...window.require('WAWebUserPrefsNotifications'),
         ...(typeof setPushname === 'function' ? { setPushname } : {})
     };
+    
     window.Store.NumberInfo = {
         ...window.require('WAPhoneUtils'),
         ...window.require('WAPhoneFindCC')
@@ -168,8 +147,7 @@ exports.ExposeStore = () => {
         ...window.require('WAWebGroupCreateJob'),
         ...window.require('WAWebGroupModifyInfoJob'),
         ...window.require('WAWebExitGroupAction'),
-        ...window.require('WAWebContactProfilePicThumbBridge'),
-        ...window.require('WAWebSetPropertyGroupAction')
+        ...window.require('WAWebContactProfilePicThumbBridge')
     };
     window.Store.GroupParticipants = {
         ...window.require('WAWebModifyParticipantsGroupAction'),
@@ -223,86 +201,8 @@ exports.ExposeStore = () => {
         ...window.require('WAWebSaveContactAction'),
         ...window.require('WAWebDeleteContactAction')
     };
-    window.Store.StatusUtils = {
-        ...window.require('WAWebContactStatusBridge'),
-        ...window.require('WAWebSendStatusMsgAction'),
-        ...window.require('WAWebRevokeStatusAction'),
-        ...window.require('WAWebStatusGatingUtils')
-    };
 
-    // =====================================================
-    // Fallback loading for modules that may have moved in WWeb 2.3000.x
-    // These modules might no longer be in WAWebCollections
-    // =====================================================
-
-    // GroupMetadata moved to WAWebGroupMetadataCollection
-    if (!window.Store.GroupMetadata) {
-        try {
-            const mod = window.require('WAWebGroupMetadataCollection');
-            window.Store.GroupMetadata = mod?.GroupMetadata ?? mod?.default;
-        } catch {
-            // Module doesn't exist in older versions
-        }
-    }
-
-    // Msg collection - critical for message events
-    if (!window.Store.Msg) {
-        try {
-            const mod = window.require('WAWebMsgCollection');
-            window.Store.Msg = mod?.Msg ?? mod?.MsgCollection ?? mod?.default;
-        } catch {
-            // Try alternative module name
-            try {
-                const mod = window.require('WAWebMessageCollection');
-                window.Store.Msg = mod?.Msg ?? mod?.default;
-            } catch {
-                // Module doesn't exist
-            }
-        }
-    }
-
-    // Chat collection - critical for chat events
-    if (!window.Store.Chat) {
-        try {
-            const mod = window.require('WAWebChatCollection');
-            window.Store.Chat = mod?.Chat ?? mod?.ChatCollection ?? mod?.default;
-        } catch {
-            // Module doesn't exist
-        }
-    }
-
-    // Call collection - for incoming call events
-    if (!window.Store.Call) {
-        try {
-            const mod = window.require('WAWebCallCollection');
-            window.Store.Call = mod?.Call ?? mod?.CallCollection ?? mod?.default;
-        } catch {
-            // Module doesn't exist
-        }
-    }
-
-    // AppState fallback - critical for disconnected event
-    if (!window.Store.AppState) {
-        try {
-            // Try alternative module names
-            const mod = window.require('WAWebAppStateModel') ?? window.require('WAWebSocketAppState');
-            window.Store.AppState = mod?.Socket ?? mod?.AppState ?? mod?.default;
-        } catch {
-            // Module doesn't exist
-        }
-    }
-
-    // Conn fallback - for battery/connection events
-    if (!window.Store.Conn) {
-        try {
-            const mod = window.require('WAWebConnCollection');
-            window.Store.Conn = mod?.Conn ?? mod?.default;
-        } catch {
-            // Module doesn't exist
-        }
-    }
-
-    if (window.Store.Chat && (!window.Store.Chat._find || !window.Store.Chat.findImpl)) {
+    if (!window.Store.Chat._find || !window.Store.Chat.findImpl) {
         window.Store.Chat._find = e => {
             const target = window.Store.Chat.get(e);
             return target ? Promise.resolve(target) : Promise.resolve({
@@ -326,7 +226,7 @@ exports.ExposeStore = () => {
     window.injectToFunction = (target, callback) => {
         try {
             let module = window.require(target.module);
-            if (!module) return; 
+            if (!module) return;
 
             const path = target.function.split('.');
             const funcName = path.pop();
