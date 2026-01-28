@@ -112,22 +112,16 @@ exports.ExposeStore = () => {
     window.Store.PollsSendVote = window.require('WAWebPollsSendVoteMsgAction');
 
     let setPushname;
-
-    /**
-     * Some WWeb builds (A/B tests) may not expose WAWebSetPushnameConnAction at bootstrap.
-     * Guard it so Store injection can proceed and to prevent Store injection from failing and blocking client initialization.
-     */
     try {
-        const mod = window.require('WAWebSetPushnameConnAction');
-        setPushname = typeof mod?.setPushname === 'function' ? mod.setPushname : undefined;
-    } catch {
+        setPushname = window.require('WAWebSetPushnameConnAction')?.setPushname;
+    } catch (e) {
         setPushname = undefined;
     }
 
     window.Store.Settings = {
         ...window.require('WAWebUserPrefsGeneral'),
         ...window.require('WAWebUserPrefsNotifications'),
-        ...(setPushname ? { setPushname } : {}),
+        ...(typeof setPushname === 'function' ? { setPushname } : {})
     };
 
 
@@ -221,6 +215,16 @@ exports.ExposeStore = () => {
         ...window.require('WAWebRevokeStatusAction'),
         ...window.require('WAWebStatusGatingUtils')
     };
+
+    // GroupMetadata moved to WAWebGroupMetadataCollection in WWeb 2.3000.x
+    if (!window.Store.GroupMetadata) {
+        try {
+            const mod = window.require('WAWebGroupMetadataCollection');
+            window.Store.GroupMetadata = mod?.GroupMetadata ?? mod?.default;
+        } catch {
+            // Module doesn't exist in older versions
+        }
+    }
 
     if (!window.Store.Chat._find || !window.Store.Chat.findImpl) {
         window.Store.Chat._find = e => {
