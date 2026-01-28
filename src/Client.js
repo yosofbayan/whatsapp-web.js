@@ -415,9 +415,9 @@ class Client extends EventEmitter {
         await this.authStrategy.afterBrowserInitialized();
         await this.initWebVersionCache();
 
-        if (this.options.evalOnNewDoc !== undefined) {
-            await page.evaluateOnNewDocument(this.options.evalOnNewDoc);
-        }
+        // if (this.options.evalOnNewDoc !== undefined) {
+        //     await page.evaluateOnNewDocument(this.options.evalOnNewDoc);
+        // }
 
         // ocVersion (isOfficialClient patch)
         // remove after 2.3000.x hard release
